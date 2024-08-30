@@ -1,0 +1,29 @@
+version: '3.8'
+
+services:
+  pubsub-emulator:
+    image: google/cloud-sdk:emulators
+    container_name: pubsub-emulator
+    ports:
+      - "8085:8085"
+    command: gcloud beta emulators pubsub start --host-port=0.0.0.0:8085 --project=test-project-id
+    environment:
+      - PUBSUB_EMULATOR_HOST=localhost:8085
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8085 || exit 1"]
+      interval: 10s
+      retries: 3
+
+  setup-pubsub:
+    image: google/cloud-sdk:emulators
+    depends_on:
+      - pubsub-emulator
+    entrypoint: >
+      /bin/bash -c "
+      until curl -s http://pubsub-emulator:8085; do sleep 1; done;
+      export PUBSUB_EMULATOR_HOST=pubsub-emulator:8085;
+      curl -X PUT http://pubsub-emulator:8085/v1/projects/test-project-id/topics/test-v1-topic;
+      curl -X PUT http://pubsub-emulator:8085/v1/projects/test-project-id/subscriptions/test-v1-subscription -H 'Content-Type: application/json' -d '{
+        \"topic\": \"projects/test-project-id/topics/test-v1-topic\"
+      }'
+      "
